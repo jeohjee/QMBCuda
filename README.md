@@ -12,9 +12,11 @@ DEPENDENCIES:
 Immediate TO DO:
 - Implement DMRG
 - Fix Heisenberg model class to deal with a more generic set of operators and make it a real XYZ (now it's XXZ)
-TO DO in the long run:
+  
+TO DO in the longer time period:
  - Implement VMC
  - Implement support for bosonic and fermionic lattice models
+
 Tehcnial debt:
 - Get rid off Armadillo dependency
 - Make logging more systematic
