@@ -4,10 +4,11 @@ For now, only the exact diagonalization algorithm for (arbitrary) Heisenberg mod
 
 The project is structured such that implementing additional methods would be straightforward such that some of the existing classes (such as symmetries, lattice models and arbitrary operators) could be made use of. The current plan is to implement next either DMRG or Variational Monte Carlo. The project is WIP.
 
+The project is built, compiled and tested by using Visual Studio 2022 on W11.
+
 DEPENDENCIES:
 - Cuda toolkit
 - Armadillo (for user-friendliness of computationally non-demanding linear algebra)
-- Built, compiled and tested by using Visual Studio 2022 on W11.
 
 Immediate TO DO:
 - Implement DMRG
