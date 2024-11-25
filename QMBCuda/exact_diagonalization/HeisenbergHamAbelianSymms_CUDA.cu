@@ -316,10 +316,7 @@ void HeisenbergHamAbelianSymms_CUDA<T>::BuildTmats(
 	thrust::device_vector<T>& T_val_dev
 ) 
 {
-
 	std::vector<std::vector<T>> T_mat0 = T_mat.getTmat();
-	//printf("T_mat is:\n");
-	//printMatrix<float>(T_mat0);
 
 	for (int i = 0; i < T_size; i++) {
 		T_ind1_dev[i] = (int)ExtReal(T_mat0[i][0]);

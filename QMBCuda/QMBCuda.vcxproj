@@ -96,6 +96,8 @@
     <ClInclude Include="exact_diagonalization\utils.h" />
     <ClInclude Include="examples\examples.h" />
     <ClInclude Include="geometry\base.h" />
+    <ClInclude Include="lattice_models\ArbitrarySpinLattice.h" />
+    <ClInclude Include="lattice_models\Heisenberg.h" />
     <ClInclude Include="lattice_models\Lattice.h" />
     <ClInclude Include="lattice_models\T_standard.h" />
     <ClInclude Include="quantum_operators\ArbitraryOperator.h" />
@@ -126,6 +128,12 @@
       <FileType>CppCode</FileType>
     </CudaCompile>
     <ClCompile Include="geometry\base.cpp" />
+    <CudaCompile Include="lattice_models\ArbitrarySpinLattice.cu">
+      <FileType>CppCode</FileType>
+    </CudaCompile>
+    <CudaCompile Include="lattice_models\Heisenberg.cu">
+      <FileType>CppCode</FileType>
+    </CudaCompile>
     <ClCompile Include="lattice_models\Lattice.cpp" />
     <CudaCompile Include="lattice_models\T_standard.cu">
       <FileType>CppCode</FileType>

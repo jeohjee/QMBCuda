@@ -107,7 +107,7 @@ __global__ void BuildHamiltonianForAbelianGroup(
 
     // TO DO: to move the input parameters to appropriate structs
     
-    // Note that here the logic is slightly different as in the simpler BuildHoppingHam_v2 in a sense that SRS_states_inds
+    // Note that here the logic is slightly different than in simpler BuildHoppingHam_v2 in a sense that SRS_states_inds
     // labels the indices of the SRS states WITHIN the chosen Hilbert subspace
 
     int id = threadIdx.x + blockIdx.x * blockDim.x;

@@ -2,8 +2,6 @@
 #include <vector>
 #include <armadillo>
 
-//extern struct LatticeGeometryInfo;
-
 struct LatticeGeometryInfo {
 	std::vector<float> rx_alpha; // x-coordinates within the unit cell.
 	std::vector<float> ry_alpha; // y-coordinates within the unit cell

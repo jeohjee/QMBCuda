@@ -1,5 +1,6 @@
 #pragma once
 #include <vector>
+#include "../geometry/base.h"
 
 class Lattice
 {
