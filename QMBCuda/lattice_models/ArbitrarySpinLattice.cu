@@ -36,3 +36,11 @@ void SpinHamiltonian<T>::CreateGeometry()
 }
 template void SpinHamiltonian<float>::CreateGeometry();
 template void SpinHamiltonian<complex_th>::CreateGeometry();
+
+template <typename T>
+ManyBodyOperator<T> SpinHamiltonian<T>::GetH()
+{
+	return H;
+}
+template ManyBodyOperator<float> SpinHamiltonian<float>::GetH();
+template ManyBodyOperator<complex_th> SpinHamiltonian<complex_th>::GetH();

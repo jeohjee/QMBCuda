@@ -874,8 +874,12 @@ int triangular_lattice_SzSz_correlator_example() {
     return 0;
 }
 
+
+
+
+
 int run_example() {
-    int func_ind = 2; // The function we execute
+    int func_ind = 15; // The function we execute
 
     
     std::vector <std::function<int() >> func_list = {

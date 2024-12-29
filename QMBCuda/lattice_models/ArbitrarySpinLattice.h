@@ -15,6 +15,7 @@ public:
 	virtual ~SpinHamiltonian() {};
 
 	void CreateGeometry();
+	ManyBodyOperator<T> GetH();
 protected:
 	ManyBodyOperator<T> H; // This is the Hamiltonian of the lattice.
 	LatticeGeometryInfo geom_info; // Hold the information about the geometry

@@ -49,8 +49,6 @@ T_standard<T>::T_standard(LatticeGeometryInfo _geom_info, vector<T> J_vec, vecto
 		return;
 	}
 
-
-
 	int J_size = J_vec.size();
 
 	map < pair<int, int>, vector<float >> r_cells2_x;
