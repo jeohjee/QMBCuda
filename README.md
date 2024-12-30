@@ -21,9 +21,11 @@ TO DO in the longer time period:
  - Implement VMC
  - Implement the Monte Carlo suite and worm algorithm
  - Implement support for bosonic and fermionic lattice models
+ - Provide a Python interface
 
 Tehcnial debt:
 - Overall cleaning of the code, add comments etc.
 - Lack of documentation
 - Get rid off Armadillo dependency
 - Make logging more professional and systematic
+- Move long arg lists of functions to structs
