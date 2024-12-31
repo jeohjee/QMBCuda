@@ -45,13 +45,13 @@ protected:
 };
 
 
-// NEXT: BUILD FUNCTIONS TO CREATE HeisenbergInfo (or maybe even better Heisenberg) for THE USUAL EXTENDED HEISENBERG MODELS
-
 bool distance_comparator(const std::pair<int, float>& a, const std::pair<int, float>& b);
 
 Heisenberg<float> CreateExtendedHeisenbergXXX(LatticeGeometryInfo geom_info, std::vector<float> J_vec, bool intra_c_bool = true, bool inter_c_bool = true);
 
 Heisenberg<float> CreateHeisenbergXXXSquare(int N1, int N2, std::vector<float> J_vec, bool intra_c_bool = true, bool inter_c_bool = true);
+
+Heisenberg<float> CreateHeisenbergXXXTriangular(int N1, int N2, std::vector<float> J_vec, bool intra_c_bool = true, bool inter_c_bool = true);
 
 
 //Heisenberg<float> CreateHeisenbergXXXSquare(N1,N2,{J2,J3,J4...})

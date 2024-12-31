@@ -69,7 +69,7 @@ void ManyBodyOperator<T>::PrintOperator() {
 	op_dict[OperatorType::Sp] = "Sp";
 	op_dict[OperatorType::Sm] = "Sm";
 
-	int max_terms_per_line = 5;
+	int max_terms_per_line = 100;
 	int term_counter = 0;
 
 	for (int i = 0; i < elements.size(); i++) {

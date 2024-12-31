@@ -182,77 +182,32 @@ Heisenberg<float> CreateHeisenbergXXXSquare(int N1, int N2, std::vector<float> J
 	/*
 	* This function creates Heisenberg<float> instance for a extended square lattice XXX Heisenberg model. 
 	* Args:
-	*	N1, N2: lattice size in x and y-directions
+	*	N1, N2: lattice size in the directions of the basis vectors.
 	*	J_vec: contains the spin-spin coupling strengths in the descending order. First element is the NN coupling, the
 	*	next one is NNN coupling and so forth.
 	*	intra_c_bool: determines whether the spin-spin couplings within the bulk are used or ignored (in most cases this should be true)
 	*	inter_c_bool: determines whether periodic boundary conditions are used (true) or not (false).
-	* This function should be easily generalizable for arbitrary lattices.  
+	*  
 	*/
 
 	LatticeGeometryInfo geom_info = create_square_lattice_info(N1, N2);
-	std::vector<std::vector<float>> A_mat = geom_info.A_mat;
-	HeisenbergInfo<float> heisenberg_info;
-
-
-	std::vector<int> i_vec;
-	std::vector<int> j_vec;
-	std::vector<float> dist_vec;
-	std::vector<int> indices;
-	int curr_ind = 0;
-	for (int ni = -N1; ni < N1; ni++) {
-		for (int nj = -N2; nj < N2; nj++) {
-			i_vec.push_back(ni);
-			j_vec.push_back(nj);
-			float tmp_dist = sqrtf(pow((float)ni * A_mat[0][0] + (float)nj * A_mat[0][1], 2) + pow((float)ni * A_mat[1][0] + (float)nj * A_mat[1][1], 2));
-			dist_vec.push_back(tmp_dist);
-			indices.push_back(curr_ind);
-			curr_ind = curr_ind + 1;
-		}
-	}
-	int i_size = i_vec.size();
-
-	// To sort i_vec, j_vec and dist_vec, we need to use the distance_comparator fuction:
-	std::vector<std::pair<int, float>> distance_pairing;
-	for (int ii = 0; ii < i_size; ii++) {
-		distance_pairing.emplace_back(indices[ii], dist_vec[ii]);
-	}
-	std::stable_sort(distance_pairing.begin(), distance_pairing.end(), distance_comparator);
-	for (int ii = 0; ii < distance_pairing.size(); ii++) {
-		indices[ii] = distance_pairing[ii].first; // needed to build final i_vec and j_vec
-		dist_vec[ii] = distance_pairing[ii].second; 
-	}
-	std::vector<int> i_vec_copy = i_vec;
-	std::vector<int> j_vec_copy = j_vec;
-
-	for (int ii = 0; ii < distance_pairing.size(); ii++) {
-		i_vec[ii] = i_vec_copy[indices[ii]];
-		j_vec[ii] = j_vec_copy[indices[ii]];
-	}
-
-	float J_curr = J_vec[0];
-	int JSize = J_vec.size();
-	int J_counter = -1;
-	float dist_curr = dist_vec[0];
-	float dist_thold = 0.001;
-	
-
-	// Over-complicated way to create the heisenberg_info struct:
-	for (int i = 0; i < i_size; i++) {
-		if (dist_vec[i] < dist_thold) continue;
-		if (dist_vec[i] > dist_curr + dist_thold) {
-			J_counter = J_counter + 1;
-			if (J_counter >= JSize) break;
-			J_curr = J_vec[J_counter];
-
-			dist_curr = dist_vec[i];
-		}
-		heisenberg_info.Jxy_terms.push_back({ i_vec[i],j_vec[i],0,0 });
-		heisenberg_info.Jz_terms.push_back({ i_vec[i],j_vec[i],0,0 });
-		heisenberg_info.Jxy_couplings.push_back(J_curr);
-		heisenberg_info.Jz_couplings.push_back(J_curr);
-	}
-	heisenberg_info.intra_c_bool = intra_c_bool;
-	heisenberg_info.inter_c_bool = inter_c_bool;
-	return Heisenberg<float>(geom_info, heisenberg_info);
+	return CreateExtendedHeisenbergXXX(geom_info, J_vec, intra_c_bool, inter_c_bool);
 }
+
+Heisenberg<float> CreateHeisenbergXXXTriangular(int N1, int N2, std::vector<float> J_vec, bool intra_c_bool, bool inter_c_bool)
+{
+	/*
+	* This function creates Heisenberg<float> instance for a extended triangular lattice XXX Heisenberg model.
+	* Args:
+	*	N1, N2: lattice size in the directions of the basis vectors.
+	*	J_vec: contains the spin-spin coupling strengths in the descending order. First element is the NN coupling, the
+	*	next one is NNN coupling and so forth.
+	*	intra_c_bool: determines whether the spin-spin couplings within the bulk are used or ignored (in most cases this should be true)
+	*	inter_c_bool: determines whether periodic boundary conditions are used (true) or not (false).
+	*
+	*/
+
+	LatticeGeometryInfo geom_info = create_triangular_lattice_info(N1, N2);
+	return CreateExtendedHeisenbergXXX(geom_info, J_vec, intra_c_bool, inter_c_bool);
+}
+
