@@ -4,24 +4,13 @@
 #include "../lattice_models/T_standard.h"
 #include "../symmetries/SymmetryClass.h"
 #include "../quantum_operators/ArbitraryOperator.h"
-
+#include "utils.h"
 
 
 /* At the moment, the class supports only XXZ model, so set J_weights accordingly when creating an instance.
 * Generalization to XYZ model is straightforward after one goes trhough the calculation with pen and paper.
  This class supports also complex-valued Hamiltonians.
 */
-
-
-// Some struct definitions to make it easier to call various functions:
-struct SRSBuildInfo {
-	int nobv_Sz0_cuda;
-	int GSize; 
-	int threads_GS;
-	int NIr;
-	int LS;
-	int GS_fill;
-};
 
 
 // template variable T accounts for both the type of the hopping and character matrix. It can be either float or thrust::complex<float>
@@ -91,14 +80,4 @@ protected:
 		thrust::device_vector<T>& char_mat_dev);
 
 };
-
-
-
-template <typename T> 
-thrust::complex<float> HeisenbergHamAbelianSymms_CUDA<T>::ComputeStaticExpValZeroT(
-	ManyBodyOperator<thrust::complex<float>> A,
-	int max_terms
-);
-
-
 

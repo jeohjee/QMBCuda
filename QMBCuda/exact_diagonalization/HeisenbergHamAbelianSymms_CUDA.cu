@@ -6,7 +6,6 @@
 #include "thrust/reduce.h"
 #include <iostream>
 #include <bitset>
-#include "utils.h"
 #include <thrust/unique.h>
 #include <thrust/execution_policy.h>
 #include "../utils/print_funcs.h"
@@ -453,8 +452,8 @@ template <typename T> complex_th HeisenbergHamAbelianSymms_CUDA<T>::ComputeStati
 {
 	int threads_GS = 32;
 	// The implementation of this function depends on the both the model and the method. Thus, we determine here which
-	// single-particle operators are appropriate and how they map to the CUDA functions. This implementation is bit cumbersome due
-	// to the limitations of CUDA.
+	// single-particle operators are appropriate and how they map to the CUDA functions. This implementation is bit cumbersome and
+	// should be improved.
 
 	// First determine the mapping from operators to CUDA action:
 	std::map<OperatorType, int> op_action_map;

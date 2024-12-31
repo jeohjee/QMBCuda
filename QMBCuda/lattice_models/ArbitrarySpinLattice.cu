@@ -44,3 +44,11 @@ ManyBodyOperator<T> SpinHamiltonian<T>::GetH()
 }
 template ManyBodyOperator<float> SpinHamiltonian<float>::GetH();
 template ManyBodyOperator<complex_th> SpinHamiltonian<complex_th>::GetH();
+
+template <typename T>
+void SpinHamiltonian<T>::SetH(ManyBodyOperator<T> _H)
+{
+	H = _H;
+}
+template void SpinHamiltonian<float>::SetH(ManyBodyOperator<float> _H);
+template void SpinHamiltonian<complex_th>::SetH(ManyBodyOperator<complex_th> _H);

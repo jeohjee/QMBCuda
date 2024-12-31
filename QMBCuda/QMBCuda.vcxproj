@@ -90,6 +90,7 @@
     <ClInclude Include="cublas_utils.h" />
     <ClInclude Include="cuda_wrappers\CudaWrappers.h" />
     <ClInclude Include="cusolver_utils.h" />
+    <ClInclude Include="exact_diagonalization\HeisenbergGenericXXZ_AbelianSymms_CUDA.h" />
     <ClInclude Include="exact_diagonalization\HeisenbergHamAbelianSymms_CUDA.h" />
     <ClInclude Include="exact_diagonalization\HeisenbergHam_CUDA.h" />
     <ClInclude Include="exact_diagonalization\lanczos.h" />
@@ -125,6 +126,9 @@
       <FileType>CppCode</FileType>
     </CudaCompile>
     <CudaCompile Include="examples\examples.cu">
+      <FileType>CppCode</FileType>
+    </CudaCompile>
+    <CudaCompile Include="exact_diagonalization\HeisenbergGenericXXZ_AbelianSymms_CUDA.cu">
       <FileType>CppCode</FileType>
     </CudaCompile>
     <ClCompile Include="geometry\base.cpp" />

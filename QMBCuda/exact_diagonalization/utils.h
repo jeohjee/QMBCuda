@@ -4,6 +4,16 @@
 #include <cstdint>
 #include "thrust/complex.h"
 
+
+struct SRSBuildInfo {
+    int nobv_Sz0_cuda;
+    int GSize;
+    int threads_GS;
+    int NIr;
+    int LS;
+    int GS_fill;
+};
+
 __device__ int GetIndexInHilbertSubspace(uint32_t target_state, int GS_sector);
 
 __global__ void SetUpSRS(uint32_t* __restrict bas_states, uint32_t* __restrict SRS_states,
