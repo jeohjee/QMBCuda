@@ -15,6 +15,7 @@
 #include "../lattice_models/T_standard.h"
 #include "../utils/print_funcs.h"
 #include "../utils/misc_funcs.h"
+#include "../lattice_models/Heisenberg.h"
 
 #define _USE_MATH_DEFINES
 #include <math.h> 
@@ -875,7 +876,14 @@ int triangular_lattice_SzSz_correlator_example() {
 }
 
 
+int create_XXX_Heisenberg_square() {
 
+    Heisenberg<float> H_model = CreateHeisenbergXXXSquare(2, 4, { 1.0,0.15 });
+    ManyBodyOperator<float> Ham = H_model.GetH();
+    Ham.PrintOperator();
+
+    return 0;
+}
 
 
 int run_example() {
@@ -898,7 +906,8 @@ int run_example() {
         Tnm_general_square_example,
         Tn_group_example,
         triangular_lattice_symmetry_example, //15th
-        triangular_lattice_SzSz_correlator_example
+        triangular_lattice_SzSz_correlator_example,
+        create_XXX_Heisenberg_square
     };
 
     int out = func_list[func_ind]();

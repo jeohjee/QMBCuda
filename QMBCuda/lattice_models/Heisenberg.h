@@ -1,24 +1,11 @@
 #pragma once
 #include "ArbitrarySpinLattice.h"
 #include "../geometry/base.h"
-#include <algorithm> 
-#include <cmath>
+
 
 // The following class represents a generic (real- or complex-valued) XXZ extended Heisenberg models
 // where Jx and Jz can be arbitrary, with the limit of Jz being of course real.
 
-/*
-template <typename T>
-struct HeisenbergInfo {
-
-	std::vector<std::vector<T>> J_vecs; 
-	// first index corresponds to the Range_vec indices, 
-	//second index is Jx, Jy, Jz, respectively 
-
-	std::vector<float> Range_vec; // Gives the range of the interaction terms.
-	bool intra_c_bool_in; 
-	bool inter_c_bool_in;
-};*/
 
 template <typename T>
 struct HeisenbergInfo {
@@ -31,9 +18,10 @@ struct HeisenbergInfo {
 
 	/* In both Jxy_terms and Jz_terms each row is a 5 element array with the struct (i, j, a, b).
 	Each row represents a single out-going coupling (the hermitian congujate terms, i.e. the in-coming couplings,
-	are created automatically.
-	(i,j) refer to target unit cell indices and (a,b) refer to sublattice indices. a means the target sublattice,
-	b is the sublattice where the hopping is originating. The corresponding coupling terms are in
+	are created automatically.)
+	(i,j) refer to target unit cell indices RELATIVE TO THE ORIGINATING UNIT CELL 
+	and (a,b) refer to sublattice indices. a means the target sublattice,
+	b is the sublattice from where the hopping is originating. The corresponding coupling terms are in
 	Jxy_couplings and Jz_couplings.
 	*/
 
@@ -60,7 +48,9 @@ protected:
 
 // NEXT: BUILD FUNCTIONS TO CREATE HeisenbergInfo (or maybe even better Heisenberg) for THE USUAL EXTENDED HEISENBERG MODELS
 
-Heisenberg<float> CreateHeisenbergXXXSquare(int N1, int N2, std::vector<float> J_vec);
+bool distance_comparator(const std::pair<int, float>& a, const std::pair<int, float>& b);
+
+Heisenberg<float> CreateHeisenbergXXXSquare(int N1, int N2, std::vector<float> J_vec, bool intra_c_bool = true, bool inter_c_bool = true);
 
 
 //Heisenberg<float> CreateHeisenbergXXXSquare(N1,N2,{J2,J3,J4...})
