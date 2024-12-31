@@ -13,16 +13,16 @@ template <typename T> Heisenberg<T>::Heisenberg(LatticeGeometryInfo _geom_info, 
 	ComputeR_diffs();
 
 	heisenberg_info = _heisenberg_info;
-	CreateHamiltonian(heisenberg_info);
+	CreateHamiltonian();
 }
 template Heisenberg<float>::Heisenberg(LatticeGeometryInfo _geom_info, HeisenbergInfo<float> _heisenberg_info);
 template Heisenberg<complex_th>::Heisenberg(LatticeGeometryInfo _geom_info, HeisenbergInfo<complex_th> _heisenberg_info);
 
 
 template <typename T>
-void Heisenberg<T>::CreateHamiltonian(HeisenbergInfo<T> heisenberg_info) 
+void Heisenberg<T>::CreateHamiltonian() 
 {
-	// This function implements the creation of a generic XYZ Heisenberg lattice Hamiltonian.
+	// This function implements the creation of a generic XXZ Heisenberg lattice Hamiltonian.
 
 	int M = geom_info.rx_alpha.size(); // number of sublattices
 	int N1 = geom_info.N1;
@@ -38,45 +38,50 @@ void Heisenberg<T>::CreateHamiltonian(HeisenbergInfo<T> heisenberg_info)
 		return;
 	}
 
-	std::vector<std::vector<int>> Jxy_terms = heisenberg_info.Jxy_terms;
-	std::vector<std::vector<int>> Jz_terms = heisenberg_info.Jz_terms;
+	std::vector<std::vector<std::vector<int>>> J_terms = { heisenberg_info.Jxy_terms, heisenberg_info.Jz_terms };
+
 	std::vector<T> Jxy_couplings = heisenberg_info.Jxy_couplings;
 	std::vector<float> Jz_couplings = heisenberg_info.Jz_couplings;
 
 	for (int uc = 0; uc < N; uc++) {
+		int j_site_1 = uc / M;
+		int j_site_2 = uc % M;
 
-		for (int ji = 0; ji < Jxy_terms.size(); ji++) {
-			int j_site = uc * M + Jxy_terms[ji][3];
-			int i_site = j_site + Jxy_terms[ji][2] + M * (N2 * Jxy_terms[ji][0] + Jxy_terms[ji][1]); // HERE IS THE BUG IN Jxy_terms, they should be moduled already here
-			
-			if (!inter_c_bool && (i_site < 0 || i_site >= LS)) continue;
-			if (!intra_c_bool && (i_site >= 0 && i_site < LS)) continue;
+		//_add_couplings(uc, Jxy_terms, Jxy_couplings, Sz_bool)
+		for (int jii = 0; jii < 2; jii++) {
+			for (int ji = 0; ji < J_terms[jii].size(); ji++) {
+				int j_site = uc * M + J_terms[jii][ji][3];
 
-			i_site = ((i_site % LS) + LS) % LS;
+				int i_site_1 = j_site_1 + J_terms[jii][ji][0];
+				int i_site_2 = j_site_2 + J_terms[jii][ji][1];
+				if (!intra_c_bool && ( (i_site_1 < 0 || i_site_1 >= N1) || (i_site_2 < 0 || i_site_2 >= N2) )) continue;
+				if (!inter_c_bool && ((i_site_1 >= 0 || i_site_1 < N1) || (i_site_2 >= 0 || i_site_2 < N2) )) continue;
 
+				i_site_1 = ((i_site_1 % N1) + N1) % N1;
+				i_site_2 = ((i_site_2 % N2) + N2) % N2;
 
-			Sp<T> Sp_i = Sp<T>(i_site);
-			Sm<T> Sm_j = Sm<T>(j_site);
-			H = H + Jxy_couplings[ji]*(Sp_i * Sm_j);
-		}
-		for (int ji = 0; ji < Jz_terms.size(); ji++) {
-			int j_site = uc * M + Jz_terms[ji][3];
-			int i_site = j_site + Jz_terms[ji][2] + M * (N2 * Jz_terms[ji][0] + Jz_terms[ji][1]);
+				int i_site = J_terms[jii][ji][2] + M * (N2 * i_site_1 + i_site_2);
 
-			if (!inter_c_bool && (i_site < 0 || i_site >= LS)) continue;
-			if (!intra_c_bool && (i_site >= 0 && i_site < LS)) continue;
+				//i_site = ((i_site % LS) + LS) % LS;
 
-			i_site = ((i_site % LS) + LS) % LS;
-			
-			Sz<T> Sz_i = Sz<T>(i_site);
-			Sz<T> Sz_j = Sz<T>(j_site);
-			H = H + Jz_couplings[ji] * (Sz_i * Sz_j);
+				if (jii == 0) {
+					Sp<T> Sp_i = Sp<T>(i_site);
+					Sm<T> Sm_j = Sm<T>(j_site);
+					H = H + Jxy_couplings[ji] * (Sp_i * Sm_j);
+				}
+				else {
+					Sz<T> Sz_i = Sz<T>(i_site);
+					Sz<T> Sz_j = Sz<T>(j_site);
+					H = H + Jz_couplings[ji] * (Sz_i * Sz_j);
+				}
+			}
 		}
 	}
 
 }
-template void Heisenberg<float>::CreateHamiltonian(HeisenbergInfo<float> heisenberg_info);
-template void Heisenberg<complex_th>::CreateHamiltonian(HeisenbergInfo<complex_th> heisenberg_info);
+template void Heisenberg<float>::CreateHamiltonian();
+template void Heisenberg<complex_th>::CreateHamiltonian();
+
 
 bool distance_comparator(const std::pair<int, float>& a, const std::pair<int, float>& b) {
 	return a.second < b.second;
@@ -88,10 +93,11 @@ Heisenberg<float> CreateHeisenbergXXXSquare(int N1, int N2, std::vector<float> J
 	* This function creates Heisenberg<float> instance for a extended square lattice XXX Heisenberg model. 
 	* Args:
 	*	N1, N2: lattice size in x and y-directions
-	*   J_vec: contains the spin-spin coupling strengths in the descending order. First element is the NN coupling, the
+	*	J_vec: contains the spin-spin coupling strengths in the descending order. First element is the NN coupling, the
 	*	next one is NNN coupling and so forth.
 	*	intra_c_bool: determines whether the spin-spin couplings within the bulk are used or ignored (in most cases this should be true)
-	*   inter_c_bool: determines whether periodic boundary conditions are used (true) or not (false).
+	*	inter_c_bool: determines whether periodic boundary conditions are used (true) or not (false).
+	* This function should be easily generalizable for arbitrary lattices.  
 	*/
 
 	LatticeGeometryInfo geom_info = create_square_lattice_info(N1, N2);

@@ -69,6 +69,9 @@ void ManyBodyOperator<T>::PrintOperator() {
 	op_dict[OperatorType::Sp] = "Sp";
 	op_dict[OperatorType::Sm] = "Sm";
 
+	int max_terms_per_line = 5;
+	int term_counter = 0;
+
 	for (int i = 0; i < elements.size(); i++) {
 		T scalar = (T)1.0;
 		std::vector<std::string> tmp_op_vec = {};
@@ -105,6 +108,11 @@ void ManyBodyOperator<T>::PrintOperator() {
 		}
 		if (i < elements.size() - 1) printf(" + ");
 
+		term_counter = term_counter + 1;
+		if (term_counter >= max_terms_per_line) {
+			term_counter = 0;
+			printf("\n");
+		}
 	}
 	printf("\n");
 }

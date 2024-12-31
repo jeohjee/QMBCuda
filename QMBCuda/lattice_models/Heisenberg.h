@@ -38,17 +38,17 @@ public:
 	Heisenberg() {};
 	Heisenberg(LatticeGeometryInfo _geom_info, HeisenbergInfo<T> _heisenberg_info);
 
-	void CreateHamiltonian(HeisenbergInfo<T> heisenberg_info);
+	void CreateHamiltonian();
 
 protected:
 	HeisenbergInfo<T> heisenberg_info;
 };
 
 
-
 // NEXT: BUILD FUNCTIONS TO CREATE HeisenbergInfo (or maybe even better Heisenberg) for THE USUAL EXTENDED HEISENBERG MODELS
 
 bool distance_comparator(const std::pair<int, float>& a, const std::pair<int, float>& b);
+
 
 Heisenberg<float> CreateHeisenbergXXXSquare(int N1, int N2, std::vector<float> J_vec, bool intra_c_bool = true, bool inter_c_bool = true);
 

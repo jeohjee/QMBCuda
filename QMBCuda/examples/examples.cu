@@ -887,7 +887,7 @@ int create_XXX_Heisenberg_square() {
 
 
 int run_example() {
-    int func_ind = 15; // The function we execute
+    int func_ind = 16; // The function we execute
 
     
     std::vector <std::function<int() >> func_list = {
