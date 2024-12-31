@@ -878,7 +878,11 @@ int triangular_lattice_SzSz_correlator_example() {
 
 int create_XXX_Heisenberg_square() {
 
-    Heisenberg<float> H_model = CreateHeisenbergXXXSquare(2, 4, { 1.0,0.15 });
+    //Heisenberg<float> H_model = CreateHeisenbergXXXSquare(2, 4, { 1.0,0.15 });
+    
+    LatticeGeometryInfo geom_info = create_square_lattice_info(2, 4);
+    Heisenberg<float> H_model = CreateExtendedHeisenbergXXX(geom_info, { 1.0,0.15 });
+    
     ManyBodyOperator<float> Ham = H_model.GetH();
     Ham.PrintOperator();
 

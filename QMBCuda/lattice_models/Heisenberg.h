@@ -49,6 +49,7 @@ protected:
 
 bool distance_comparator(const std::pair<int, float>& a, const std::pair<int, float>& b);
 
+Heisenberg<float> CreateExtendedHeisenbergXXX(LatticeGeometryInfo geom_info, std::vector<float> J_vec, bool intra_c_bool = true, bool inter_c_bool = true);
 
 Heisenberg<float> CreateHeisenbergXXXSquare(int N1, int N2, std::vector<float> J_vec, bool intra_c_bool = true, bool inter_c_bool = true);
 
