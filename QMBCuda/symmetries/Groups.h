@@ -6,7 +6,6 @@
 
 typedef SymmetryClass<thrust::complex<float>> SymmetryClassC;
 
-
 class Cn_group : public SymmetryClassC
 {
 public:

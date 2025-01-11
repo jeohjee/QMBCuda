@@ -19,7 +19,7 @@ void WriteArrayToFile(std::string file_name, float* array, int array_size);
 
 // For some reason, thrust::copy cannot deal with templates very well if used in the source file
 template <typename T>
-void printDeviceMatrix(thrust::device_vector<T> DevMat, int NRows, int NCols, std::string header, std::string ender) {
+void printDeviceMatrix(thrust::device_vector<T> DevMat, int NRows, int NCols, std::string header= " ", std::string ender= " ") {
     printf("%s:\n", header.c_str());
     int start_ind = 0;
     for (int i = 0; i < NRows; i++) {

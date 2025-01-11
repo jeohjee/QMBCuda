@@ -3,7 +3,7 @@
 #include "device_launch_parameters.h"
 #include <cstdint>
 #include "thrust/complex.h"
-
+#include "../quantum_operators/SingleParticleOperators.h"
 
 struct SRSBuildInfo {
     int nobv_Sz0_cuda;
@@ -13,6 +13,7 @@ struct SRSBuildInfo {
     int LS;
     int GS_fill;
 };
+
 
 __device__ int GetIndexInHilbertSubspace(uint32_t target_state, int GS_sector);
 
@@ -42,6 +43,31 @@ __global__ void BuildHamiltonianForAbelianGroup(
     int* __restrict T_ind2_dev,
     T* __restrict T_val_dev,
     int T_size,
+    uint32_t* __restrict SRS_states_inds,
+    int GSize,
+    uint32_t* __restrict orbit_indices,
+    T* __restrict char_mat,
+    int alpha_ind,
+    float* __restrict norm_vecs,
+    int NIr,
+    float tol_norm
+);
+
+template <typename T>
+__global__ void BuildHamiltonianXXZForAbelianGroup(
+    T* __restrict H_scalar_table_dev,
+    OperatorType* __restrict H_decode_table_dev,
+    int* __restrict H_site_table_dev,
+    int* __restrict H_NOTerms_dev,
+    int H_size,
+    int H_col_size,
+    int GS_sector,
+    uint32_t* __restrict basis_states,
+    uint32_t* __restrict ind_mat,
+    T* __restrict val_mat,
+    short int* __restrict  track_vec,
+    int max_terms,
+    int SRS_unique_count,
     uint32_t* __restrict SRS_states_inds,
     int GSize,
     uint32_t* __restrict orbit_indices,

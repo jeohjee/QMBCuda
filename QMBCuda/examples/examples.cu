@@ -1,6 +1,7 @@
 #include "examples.h"
 #include "../exact_diagonalization/HeisenbergHam_CUDA.h"
 #include "../exact_diagonalization/HeisenbergHamAbelianSymms_CUDA.h"
+#include "../exact_diagonalization/HeisenbergGenericXXZ_AbelianSymms_CUDA.h"
 #include "cuComplex.h"
 #include <vector>
 #include <functional>
@@ -315,7 +316,7 @@ int square_lattice_symmetries_example2() {
     complex_th J2 = complex_th(0.15, 0.0);
 
     // Size of the lattice
-    int N1 = 4;
+    int N1 = 2;
     int N2 = 4;
 
     LatticeGeometryInfo geom_info = create_square_lattice_info(N1,N2);
@@ -323,7 +324,6 @@ int square_lattice_symmetries_example2() {
     int LS = N1 * N2;
 
     Tnm_group symm_group(geom_info);
-
 
     std::vector<complex_th> J_vec = { J1,J2 };
     std::vector<float> Range_vec = { 1.0001,1.4143 };
@@ -333,7 +333,6 @@ int square_lattice_symmetries_example2() {
     T_standard<complex_th> TLat(geom_info, J_vec, Range_vec, intra_c_bool, inter_c_bool);
     std::vector<float> B_field_vec(LS, 0.0f);
     std::vector<float> J_dim_weights = { 1.0,1.0,1.0 };
-
 
     // Next we create the Hamiltonian
     auto Heisenberg_time = std::chrono::high_resolution_clock::now();
@@ -358,14 +357,11 @@ int square_lattice_symmetries_example2() {
     Operator<complex_th> Sz0(0, OperatorType::Sz,1.0);
     Operator<complex_th> Sz1(3, OperatorType::Sz,1.0);
     std::vector< Operator<complex_th>> aux_vec = { Sz0, Sz1 };
-
     ManyBodyOperator<complex_th> Sz_mb_wrapper;
     Sz_mb_wrapper.AddTerm(aux_vec);
 
     complex_th Sz0_exp;
-
     Sz0_exp = Ham.ComputeStaticExpValZeroT(Sz_mb_wrapper);
-
     std::cout << "\n Result: " << Sz0_exp.real() << ", 1i " << Sz0_exp.imag() << "\n";
 
     return 0;
@@ -782,8 +778,6 @@ int triangular_lattice_SzSz_correlator_example() {
 
     Tnm_group symm_group(geom_info);
 
-    // Later on, we should write more generic functions to create automatically the symmetry classes, including the translational invariance
-
     std::vector<complex_th> J_vec = { J1,J2 };
     std::vector<float> Range_vec = { 1.0001,1.733 };
     int intra_c_bool = 1;
@@ -793,12 +787,10 @@ int triangular_lattice_SzSz_correlator_example() {
     std::vector<float> B_field_vec(LS, 0.0f);
     std::vector<float> J_dim_weights = { 1.0,1.0,1.0 };
 
-
     // Next we create the Hamiltonian
     auto Heisenberg_time = std::chrono::high_resolution_clock::now();
 
     int max_term = 2 * TLat.getTSize() / (N1 * N2);
-    max_term = max_term;
 
     HeisenbergHamAbelianSymms_CUDA<complex_th> Ham(TLat, B_field_vec, J_dim_weights, LS / 2, &symm_group, max_term);
 
@@ -878,22 +870,51 @@ int triangular_lattice_SzSz_correlator_example() {
 
 int create_XXX_Heisenberg() {
 
-    //Heisenberg<float> H_model = CreateHeisenbergXXXSquare(2, 4, { 1.0,0.15 });
-    //ManyBodyOperator<float> Ham = H_model.GetH();
-    //Ham.PrintOperator();
+    Heisenberg<float> H_model = CreateHeisenbergXXXSquare<float>(2, 4, { 1.0,0.15 });
+    ManyBodyOperator<float> Ham = H_model.GetH();
+    Ham.PrintOperator();
 
-    Heisenberg<float> H_model_triangular = CreateHeisenbergXXXTriangular(2, 4, { 1.0,0.15 });
-    ManyBodyOperator<float> Ham_t = H_model_triangular.GetH();
-    Ham_t.PrintOperator();
+    //Heisenberg<float> H_model_triangular = CreateHeisenbergXXXTriangular<float>(2, 4, { 1.0,0.15 });
+    //ManyBodyOperator<float> Ham_t = H_model_triangular.GetH();
+    //Ham_t.PrintOperator();
 
     return 0;
 }
 
 
-int run_example() {
-    int func_ind = 16; // The function we execute
+int solve_XXX_Heisenberg_square_generic_formalism() {
 
-    
+    // This function should compute the ground state energy the same way as 'square_lattice_symmetries_example2()'
+    // function above. However, we use the more generic formalism which is more compact 
+    // and easier to use than the old way of 'square_lattice_symmetries_example2()'
+
+    Heisenberg<complex_th> H_model = CreateHeisenbergXXXSquare<complex_th>(2, 4, { 1.0,0.15 });
+    //Heisenberg<complex_th> H_model = CreateHeisenbergXXXSquare<complex_th>(2, 4, { 1.0 });
+    //H_model.GetH().PrintOperator();
+
+    Tnm_group symm_group(H_model.GetGeomInfo()); // create the symmetry group
+
+    HeisenbergXXZAbelianSymms_CUDA<complex_th> Ham = HeisenbergXXZAbelianSymms_CUDA<complex_th>(
+        H_model,
+        &symm_group);
+
+
+    Operator<complex_th> Sz0(0, OperatorType::Sz, 1.0);
+    Operator<complex_th> Sz1(3, OperatorType::Sz, 1.0);
+    std::vector< Operator<complex_th>> aux_vec = { Sz0, Sz1 };
+    ManyBodyOperator<complex_th> Sz_mb_wrapper;
+    Sz_mb_wrapper.AddTerm(aux_vec);
+
+    complex_th Sz0_exp;
+    Sz0_exp = Ham.ComputeStaticExpValZeroT(Sz_mb_wrapper);
+    std::cout << "\n Result: " << Sz0_exp.real() << ", 1i " << Sz0_exp.imag() << "\n";
+
+    return 0;
+}
+
+int run_example() {
+    int func_ind = 7; // The function we execute
+
     std::vector <std::function<int() >> func_list = {
         complex_example,
         operator_example,
@@ -911,7 +932,8 @@ int run_example() {
         Tn_group_example,
         triangular_lattice_symmetry_example, //15th
         triangular_lattice_SzSz_correlator_example,
-        create_XXX_Heisenberg
+        create_XXX_Heisenberg,
+        solve_XXX_Heisenberg_square_generic_formalism
     };
 
     int out = func_list[func_ind]();

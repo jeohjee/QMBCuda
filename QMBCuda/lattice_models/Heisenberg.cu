@@ -85,7 +85,8 @@ bool distance_comparator(const std::pair<int, float>& a, const std::pair<int, fl
 	return a.second < b.second;
 }
 
-Heisenberg<float> CreateExtendedHeisenbergXXX(LatticeGeometryInfo geom_info, std::vector<float> J_vec, bool intra_c_bool, bool inter_c_bool) {
+template <typename T>
+Heisenberg<T> CreateExtendedHeisenbergXXX(LatticeGeometryInfo geom_info, std::vector<float> J_vec, bool intra_c_bool, bool inter_c_bool) {
 	/*
 	* This function creates Heisenberg<float> instance for the convetional extended XXX Heisenberg model in a lattice geometry determined by geom_info.
 	* Args:
@@ -98,7 +99,7 @@ Heisenberg<float> CreateExtendedHeisenbergXXX(LatticeGeometryInfo geom_info, std
 	*/
 
 	std::vector<std::vector<float>> A_mat = geom_info.A_mat;
-	HeisenbergInfo<float> heisenberg_info;
+	HeisenbergInfo<T> heisenberg_info;
 	int N1 = geom_info.N1;
 	int N2 = geom_info.N2;
 	int M = geom_info.rx_alpha.size();
@@ -131,7 +132,6 @@ Heisenberg<float> CreateExtendedHeisenbergXXX(LatticeGeometryInfo geom_info, std
 		}
 	}
 	// SORTING:
-
 	int dist_size = dist_vec.size();
 	// To sort i_vec, j_vec and dist_vec, we need to use the distance_comparator fuction:
 	std::vector<std::pair<int, float>> distance_pairing;
@@ -154,7 +154,6 @@ Heisenberg<float> CreateExtendedHeisenbergXXX(LatticeGeometryInfo geom_info, std
 	int J_counter = -1;
 	float dist_curr = dist_vec[0];
 	float dist_thold = 0.001;
-
 	// Over-complicated way to create the heisenberg_info struct:
 	for (int i = 0; i < dist_size; i++) {
 		if (dist_vec[i] < dist_thold) continue;
@@ -167,17 +166,19 @@ Heisenberg<float> CreateExtendedHeisenbergXXX(LatticeGeometryInfo geom_info, std
 		}
 		heisenberg_info.Jxy_terms.push_back(all_coupling_terms[i]);
 		heisenberg_info.Jz_terms.push_back(all_coupling_terms[i]);
-		heisenberg_info.Jxy_couplings.push_back(J_curr);
+		heisenberg_info.Jxy_couplings.push_back((T)J_curr);
 		heisenberg_info.Jz_couplings.push_back(J_curr);
 	}
 	heisenberg_info.intra_c_bool = intra_c_bool;
 	heisenberg_info.inter_c_bool = inter_c_bool;
-	return Heisenberg<float>(geom_info, heisenberg_info);
+	return Heisenberg<T>(geom_info, heisenberg_info);
 
 }
+template Heisenberg<float> CreateExtendedHeisenbergXXX(LatticeGeometryInfo geom_info, std::vector<float> J_vec, bool intra_c_bool, bool inter_c_bool);
+template Heisenberg<complex_th> CreateExtendedHeisenbergXXX(LatticeGeometryInfo geom_info, std::vector<float> J_vec, bool intra_c_bool, bool inter_c_bool);
 
-
-Heisenberg<float> CreateHeisenbergXXXSquare(int N1, int N2, std::vector<float> J_vec, bool intra_c_bool, bool inter_c_bool)
+template <typename T>
+Heisenberg<T> CreateHeisenbergXXXSquare(int N1, int N2, std::vector<float> J_vec, bool intra_c_bool, bool inter_c_bool)
 {
 	/*
 	* This function creates Heisenberg<float> instance for a extended square lattice XXX Heisenberg model. 
@@ -189,12 +190,14 @@ Heisenberg<float> CreateHeisenbergXXXSquare(int N1, int N2, std::vector<float> J
 	*	inter_c_bool: determines whether periodic boundary conditions are used (true) or not (false).
 	*  
 	*/
-
 	LatticeGeometryInfo geom_info = create_square_lattice_info(N1, N2);
-	return CreateExtendedHeisenbergXXX(geom_info, J_vec, intra_c_bool, inter_c_bool);
+	return CreateExtendedHeisenbergXXX<T>(geom_info, J_vec, intra_c_bool, inter_c_bool);
 }
+template Heisenberg<float> CreateHeisenbergXXXSquare(int N1, int N2, std::vector<float> J_vec, bool intra_c_bool=true, bool inter_c_bool=true);
+template Heisenberg<complex_th> CreateHeisenbergXXXSquare(int N1, int N2, std::vector<float> J_vec, bool intra_c_bool = true, bool inter_c_bool = true);
 
-Heisenberg<float> CreateHeisenbergXXXTriangular(int N1, int N2, std::vector<float> J_vec, bool intra_c_bool, bool inter_c_bool)
+template <typename T>
+Heisenberg<T> CreateHeisenbergXXXTriangular(int N1, int N2, std::vector<float> J_vec, bool intra_c_bool, bool inter_c_bool)
 {
 	/*
 	* This function creates Heisenberg<float> instance for a extended triangular lattice XXX Heisenberg model.
@@ -206,8 +209,8 @@ Heisenberg<float> CreateHeisenbergXXXTriangular(int N1, int N2, std::vector<floa
 	*	inter_c_bool: determines whether periodic boundary conditions are used (true) or not (false).
 	*
 	*/
-
 	LatticeGeometryInfo geom_info = create_triangular_lattice_info(N1, N2);
-	return CreateExtendedHeisenbergXXX(geom_info, J_vec, intra_c_bool, inter_c_bool);
+	return CreateExtendedHeisenbergXXX<T>(geom_info, J_vec, intra_c_bool, inter_c_bool);
 }
-
+template Heisenberg<float> CreateHeisenbergXXXTriangular(int N1, int N2, std::vector<float> J_vec, bool intra_c_bool = true, bool inter_c_bool = true);
+template Heisenberg<complex_th> CreateHeisenbergXXXTriangular(int N1, int N2, std::vector<float> J_vec, bool intra_c_bool = true, bool inter_c_bool = true);

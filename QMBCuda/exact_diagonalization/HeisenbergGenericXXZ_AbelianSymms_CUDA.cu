@@ -1,4 +1,4 @@
-#include "HeisenbergHamAbelianSymms_CUDA.h"
+#include "HeisenbergGenericXXZ_AbelianSymms_CUDA.h"
 #include <thrust/copy.h>
 #include "thrust/sort.h"
 #include "thrust/fill.h"
@@ -13,30 +13,29 @@
 #include "../utils/misc_funcs_gpu.h"
 #include <chrono>
 #include "lanczos.h"
+#include "../quantum_operators/SingleParticleOperators.h"
 
 using complex_th = thrust::complex<float>;
 
-template <typename T> HeisenbergHamAbelianSymms_CUDA<T>::HeisenbergHamAbelianSymms_CUDA(
-	T_standard<T> T_mat_in, 
-	std::vector<float> B_field_in, 
-	std::vector<float> J_dim_weights,
-	int GS_sector_in, 
-	SymmetryClass<T>* SymmGroup_in, 
-	int hop_f_in, 
-	int NStates_in, 
+template <typename T> HeisenbergXXZAbelianSymms_CUDA<T>::HeisenbergXXZAbelianSymms_CUDA(
+	Heisenberg<T> _lattice_model,
+	SymmetryClass<T>* SymmGroup_in,
+	int hop_f,
+	int GS_sector_in,
+	int NStates_in,
 	long long seed,
-	const int NIter_in, 
+	const int NIter_in,
 	float tol_norm_in
 )
 {
-	T_mat = T_mat_in;
-	B_field = B_field_in; // TO DO: this variable is not used at the moment
-	J_weights = J_dim_weights;
-	GS_sector = GS_sector_in;
+	lattice_model = _lattice_model;
+	LS = lattice_model.GetLS();
 	SymmGroup = SymmGroup_in;
-	LS = B_field.size();
+
+	if (GS_sector_in < 0) GS_sector = LS / 2;
+	else GS_sector = GS_sector_in;
+
 	NStates = NStates_in;
-	hop_f = hop_f_in;
 	tol_norm = tol_norm_in;
 	NIter = NIter_in;
 
@@ -50,7 +49,7 @@ template <typename T> HeisenbergHamAbelianSymms_CUDA<T>::HeisenbergHamAbelianSym
 
 	// As the old code uses armadillo, one needs to transform the group elements to a format accessible to CUDA:
 	group_el_arr = new uint32_t[LS * GSize];
-	SymmGroup->GetGroupElemArr(T_mat.GetR1(), T_mat.GetR2(), group_el_arr); // Store the information on the group elements to array
+	SymmGroup->GetGroupElemArr(lattice_model.GetR1(), lattice_model.GetR2(), group_el_arr); // Store the information on the group elements to array
 	printMatrixRowMajor_NonSq(group_el_arr, GSize, LS);
 
 	// Copy the group elements to the device memory:
@@ -61,19 +60,6 @@ template <typename T> HeisenbergHamAbelianSymms_CUDA<T>::HeisenbergHamAbelianSym
 	TransformMatArr(char_mat_arr, &char_mat, GSize, GSize);
 	thrust::device_vector<T> char_mat_dev(char_mat_arr, char_mat_arr + GSize * GSize);
 
-	//printf("The character matrix is:\n");
-	//printDeviceMatrix<T>(char_mat_dev, GSize, GSize);
-
-	// Copy the content of T_mat to device memory:
-	int T_size = T_mat.getTSize();
-	thrust::device_vector<int> T_ind1_dev(T_size, 0);
-	thrust::device_vector<int> T_ind2_dev(T_size, 0);
-	thrust::device_vector<T> T_val_dev(T_size, 0);
-	BuildTmats(T_size, T_ind1_dev, T_ind2_dev, T_val_dev);
-
-	//printf("first column of T_mat:\n");
-	//thrust::copy(T_ind1_dev.begin(), T_ind1_dev.end() - 1, std::ostream_iterator<int>(std::cout, "\n"));
-
 	// From here onwards, we will build Hamiltonians. 
 	unsigned long long int nobv = pow(2, LS);
 
@@ -81,7 +67,10 @@ template <typename T> HeisenbergHamAbelianSymms_CUDA<T>::HeisenbergHamAbelianSym
 
 	// Set up the corresponding Hilbert space:
 	int GS_fill = GS_sector;
-	int max_terms = (GS_fill * hop_f) / 2;
+	// 2 * TLat.getTSize() / (N1 * N2);
+	if (hop_f > 0) max_coupling_terms = (GS_fill * hop_f);
+	else max_coupling_terms = lattice_model.GetH().GetElems().size() * GS_fill / LS + 1;
+	int max_terms = max_coupling_terms;
 
 	double nobv_Sz0_cuda_d = NChoosek2(static_cast<double>(LS), static_cast<double>(GS_fill));
 	int nobv_Sz0_cuda = static_cast<int>(nobv_Sz0_cuda_d);
@@ -110,7 +99,24 @@ template <typename T> HeisenbergHamAbelianSymms_CUDA<T>::HeisenbergHamAbelianSym
 		bas_states_dev, SRS_states, SRS_states_min,
 		group_el_dev, norm_vecs, orbit_indices, char_mat_dev);
 
-	printf("Allocate the arrays needed to represnt the Hamiltonian\n");
+	// Allocate CUDA operators:
+	ManyBodyOperator<T> H = lattice_model.GetH();
+	OperatorVectors<T> Ham_vecs = BuildOperatorVecs(H);
+	int H_size = Ham_vecs.H_size;
+	int H_col_size = Ham_vecs.H_col_size;
+
+	// Copy to device memory:
+	thrust::device_vector<OperatorType> H_decode_table_dev(H_size * H_col_size);
+	thrust::device_vector<T> H_scalar_table_dev(H_size);
+	thrust::device_vector<int> H_site_table_dev(H_size * H_col_size);
+	thrust::device_vector<int> H_NOTerms_dev(H_size);
+
+	thrust::copy(Ham_vecs.H_decode_table.begin(), Ham_vecs.H_decode_table.end(), H_decode_table_dev.begin());
+	thrust::copy(Ham_vecs.H_scalar_table.begin(), Ham_vecs.H_scalar_table.end(), H_scalar_table_dev.begin());
+	thrust::copy(Ham_vecs.H_site_table.begin(), Ham_vecs.H_site_table.end(), H_site_table_dev.begin());
+	thrust::copy(Ham_vecs.H_NOTerms.begin(), Ham_vecs.H_NOTerms.end(), H_NOTerms_dev.begin());
+
+	printf("Allocate the arrays needed to represent the Hamiltonian\n");
 	thrust::device_vector<uint32_t> index_mat_dev(SRS_unique_count * max_terms);
 	thrust::device_vector<T> vals_mat_dev(SRS_unique_count * max_terms);
 	thrust::device_vector<short int> track_non_zero_inds_dev(SRS_unique_count, 0);
@@ -129,38 +135,36 @@ template <typename T> HeisenbergHamAbelianSymms_CUDA<T>::HeisenbergHamAbelianSym
 		auto start_time_CUDA_create_Ham3 = std::chrono::high_resolution_clock::now();
 
 		blocks_GS = (SRS_unique_count + threads_GS - 1) / threads_GS;
-		BuildHamiltonianForAbelianGroup << <blocks_GS, threads_GS >> > (J_dim_weights[0], J_dim_weights[2], GS_fill, bas_states_dev.data().get(), index_mat_dev.data().get(),
-			vals_mat_dev.data().get(), track_non_zero_inds_dev.data().get(), max_terms, SRS_unique_count,
-			T_ind1_dev.data().get(), T_ind2_dev.data().get(), T_val_dev.data().get(), T_size,
-			SRS_states.data().get(), GSize, orbit_indices.data().get(), char_mat_dev.data().get(), alpha,
-			norm_vecs.data().get(), NIr, tol_norm);
-
+		BuildHamiltonianXXZForAbelianGroup << <blocks_GS, threads_GS >> > (
+			H_scalar_table_dev.data().get(),
+			H_decode_table_dev.data().get(),
+			H_site_table_dev.data().get(),
+			H_NOTerms_dev.data().get(),
+			Ham_vecs.H_size,
+			Ham_vecs.H_col_size,
+			GS_fill,
+			bas_states_dev.data().get(),
+			index_mat_dev.data().get(),
+			vals_mat_dev.data().get(),
+			track_non_zero_inds_dev.data().get(),
+			max_terms,
+			SRS_unique_count,
+			SRS_states.data().get(),
+			GSize,
+			orbit_indices.data().get(),
+			char_mat_dev.data().get(),
+			alpha,
+			norm_vecs.data().get(),
+			NIr,
+			tol_norm
+			);
 		cudaDeviceSynchronize();
 		auto end_time_CUDA_create_Ham3 = std::chrono::high_resolution_clock::now();
 		auto duration_time_CUDA3 = std::chrono::duration_cast<std::chrono::milliseconds> (end_time_CUDA_create_Ham3 - start_time_CUDA_create_Ham3);
 		std::cout << "\n Elapsed time of creating the Hamiltonian: " << duration_time_CUDA3.count() << " ms" << std::endl;
 
-		printDeviceMatrix<T>(vals_mat_dev, SRS_unique_count, max_terms);
-		printDeviceMatrix<uint32_t>(index_mat_dev, SRS_unique_count, max_terms);
-
 		int max_term_real = *(thrust::max_element(track_non_zero_inds_dev.begin(), track_non_zero_inds_dev.end()));
 		printf("max term per row is: %d and the max_terms parameter is %d\n", max_term_real, max_terms);
-
-		/////////////// saving the val_mat and index_mat to disk:
-		/*thrust::host_vector<float>vals_mat_host(SRS_unique_count * max_terms);
-		thrust::host_vector<uint32_t>index_mat_host(SRS_unique_count * max_terms);
-		thrust::copy(vals_mat_dev.begin(), vals_mat_dev.end(), vals_mat_host.begin());
-		thrust::copy(index_mat_dev.begin(), index_mat_dev.end(), index_mat_host.begin());
-
-		float* val_mat_ptr2 = (float*)malloc(sizeof(float)* SRS_unique_count * max_terms);
-		float* ind_mat_ptr2 = (float*)malloc(sizeof(float) * SRS_unique_count * max_terms);
-
-		for (int pi = 0; pi < SRS_unique_count * max_terms; pi++) val_mat_ptr2[pi] = vals_mat_host[pi];
-		for (int pi = 0; pi < SRS_unique_count * max_terms; pi++) ind_mat_ptr2[pi] = (float)index_mat_host[pi];
-
-		WriteArrayToFile("vals_mat.bin", val_mat_ptr2, SRS_unique_count * max_terms);
-		WriteArrayToFile("ind_mat.bin", ind_mat_ptr2, SRS_unique_count * max_terms);*/
-		/////////////////////////////////////////////////////////
 
 		std::vector<float> E_vec_tmp(NStates, 0.0);
 		std::vector<long long> seed_vec_tmp(NStates, 0);
@@ -182,9 +186,7 @@ template <typename T> HeisenbergHamAbelianSymms_CUDA<T>::HeisenbergHamAbelianSym
 			T* val_mat_ptr = thrust::raw_pointer_cast(&vals_mat_dev[0]);
 			short int* track_ptr = thrust::raw_pointer_cast(&track_non_zero_inds_dev[0]);
 
-
 			//const int NIter = 50;
-
 			float conv_err = 1.0;
 			float conv_thold = 0.0001;
 
@@ -248,39 +250,34 @@ template <typename T> HeisenbergHamAbelianSymms_CUDA<T>::HeisenbergHamAbelianSym
 	printf("//////////////////////////////\n");
 }
 
-template HeisenbergHamAbelianSymms_CUDA<float>::HeisenbergHamAbelianSymms_CUDA(
-	T_standard<float> T_mat_in,
-	std::vector<float> B_field_in,
-	std::vector<float> J_dim_weights,
-	int GS_sector_in,
+template HeisenbergXXZAbelianSymms_CUDA<float>::HeisenbergXXZAbelianSymms_CUDA(
+	Heisenberg<float> _lattice_model,
 	SymmetryClass<float>* SymmGroup_in,
-	int hop_f_in,
+	int hop_f_in=-1,
+	int GS_sector_in=-1,
 	int NStates_in = 1,
 	long long seed = 2212456,
 	const int NIter_in = 50,
 	float tol_norm_in = 0.00001
 );
 
-template HeisenbergHamAbelianSymms_CUDA<complex_th>::HeisenbergHamAbelianSymms_CUDA(
-	T_standard<complex_th> T_mat_in,
-	std::vector<float> B_field_in,
-	std::vector<float> J_dim_weights,
-	int GS_sector_in,
+template HeisenbergXXZAbelianSymms_CUDA<complex_th>::HeisenbergXXZAbelianSymms_CUDA(
+	Heisenberg<complex_th> _lattice_model,
 	SymmetryClass<complex_th>* SymmGroup_in,
-	int hop_f_in,
+	int hop_f_in=-1,
+	int GS_sector_in=-1,
 	int NStates_in = 1,
 	long long seed = 2212456,
 	const int NIter_in = 50,
 	float tol_norm_in = 0.00001
 );
-
 
 
 template <typename T>
-void HeisenbergHamAbelianSymms_CUDA<T>::BuildBasisStates(
-	thrust::device_vector<uint32_t>& bas_states_dev, 
+void HeisenbergXXZAbelianSymms_CUDA<T>::BuildBasisStates(
+	thrust::device_vector<uint32_t>& bas_states_dev,
 	unsigned long long int nobv
-) 
+)
 {
 	int ind_tmp = 0;
 	thrust::host_vector<uint32_t> bas_states_host(nobv_gs);
@@ -297,48 +294,51 @@ void HeisenbergHamAbelianSymms_CUDA<T>::BuildBasisStates(
 	printf("copy the relevant Fock states to the device memory\n");
 	thrust::copy(bas_states_host.begin(), bas_states_host.end(), bas_states_dev.begin());
 }
-template void HeisenbergHamAbelianSymms_CUDA<float>::BuildBasisStates(
+template void HeisenbergXXZAbelianSymms_CUDA<float>::BuildBasisStates(
 	thrust::device_vector<uint32_t>& bas_states_dev,
 	unsigned long long int nobv
 );
-template void HeisenbergHamAbelianSymms_CUDA<complex_th>::BuildBasisStates(
+template void HeisenbergXXZAbelianSymms_CUDA<complex_th>::BuildBasisStates(
 	thrust::device_vector<uint32_t>& bas_states_dev,
 	unsigned long long int nobv
 );
-
 
 template <typename T>
-void HeisenbergHamAbelianSymms_CUDA<T>::BuildTmats(
-	int T_size, 
-	thrust::device_vector<int>& T_ind1_dev,
-	thrust::device_vector<int>& T_ind2_dev, 
-	thrust::device_vector<T>& T_val_dev
-) 
+OperatorVectors<T> HeisenbergXXZAbelianSymms_CUDA<T>::BuildOperatorVecs(ManyBodyOperator<T> H)
 {
-	std::vector<std::vector<T>> T_mat0 = T_mat.getTmat();
+	
+	int H_size = H.GetElems().size();
+	int H_col_size = H.GetMaxTerms();
+	thrust::host_vector<OperatorType> H_decode_table(H_size * H_col_size);
+	thrust::host_vector<T> H_scalar_table(H_size, (T)1.0);
+	thrust::host_vector<int> H_site_table(H_size * H_col_size, -1); // We initialize this to -1 as -1 indicates dummy elements
+	thrust::host_vector<int> H_NOTerms(H_size, 0); // It is convenient to have this
 
-	for (int i = 0; i < T_size; i++) {
-		T_ind1_dev[i] = (int)ExtReal(T_mat0[i][0]);
-		T_ind2_dev[i] = (int)ExtReal(T_mat0[i][1]);
-		T_val_dev[i] = (T)T_mat0[i][2];
+	for (int hi = 0; hi < H_size; hi++) {
+		H_NOTerms[hi] = H.GetElems()[hi].size();
+		for (int hi2 = 0; hi2 < H.GetElems()[hi].size(); hi2++) {
+			H_decode_table[hi * H_col_size + hi2] = GetConjugateOperatorType(H.GetElems()[hi][hi2].GetType()); //Needs to be conjugated due to the operator order
+			H_site_table[hi * H_col_size + hi2] = H.GetElems()[hi][hi2].GetSite();
+			H_scalar_table[hi] = H_scalar_table[hi] * (GetComplexConjugateHost(H.GetElems()[hi][hi2].GetScalar()));
+			//std::cout << PrintOperatorType(H_decode_table[hi * H_col_size + hi2]);
+		}
+		//std::cout << H_scalar_table[hi] << std::endl;
 	}
-}
-template void HeisenbergHamAbelianSymms_CUDA<float>::BuildTmats(
-	int T_size,
-	thrust::device_vector<int>& T_ind1_dev,
-	thrust::device_vector<int>& T_ind2_dev,
-	thrust::device_vector<float>& T_val_dev
-);
-template void HeisenbergHamAbelianSymms_CUDA<complex_th>::BuildTmats(
-	int T_size,
-	thrust::device_vector<int>& T_ind1_dev,
-	thrust::device_vector<int>& T_ind2_dev,
-	thrust::device_vector<complex_th>& T_val_dev
-);
 
+	OperatorVectors<T> Ham_vecs;
+	Ham_vecs.H_size = H_size;
+	Ham_vecs.H_col_size = H_col_size;
+	Ham_vecs.H_decode_table = H_decode_table;
+	Ham_vecs.H_scalar_table = H_scalar_table;
+	Ham_vecs.H_site_table = H_site_table;
+	Ham_vecs.H_NOTerms = H_NOTerms;
+	return Ham_vecs;
+}
+template OperatorVectors<float> HeisenbergXXZAbelianSymms_CUDA<float>::BuildOperatorVecs(ManyBodyOperator<float> H);
+template OperatorVectors<complex_th> HeisenbergXXZAbelianSymms_CUDA<complex_th>::BuildOperatorVecs(ManyBodyOperator<complex_th> H);
 
 template <typename T>
-int HeisenbergHamAbelianSymms_CUDA<T>::BuildSRStates(SRSBuildInfo build_info,
+int HeisenbergXXZAbelianSymms_CUDA<T>::BuildSRStates(SRSBuildInfo build_info,
 	thrust::device_vector<uint32_t>& bas_states_dev,
 	thrust::device_vector<uint32_t>& SRS_states,
 	thrust::device_vector<uint32_t>& SRS_states_min,
@@ -359,7 +359,6 @@ int HeisenbergHamAbelianSymms_CUDA<T>::BuildSRStates(SRSBuildInfo build_info,
 	SetUpSRS << <blocks_GS, threads_GS >> > (bas_states_dev.data().get(), SRS_states.data().get()
 		, group_el_dev.data().get(), nobv_Sz0_cuda, GSize, LS, GS_fill);
 	cudaDeviceSynchronize();
-
 	printf("Solving the minimum SRS states\n");
 	blocks_GS = (nobv_Sz0_cuda + threads_GS - 1) / threads_GS;
 	SolveSRS_min << <blocks_GS, threads_GS >> > (SRS_states.data().get(), SRS_states_min.data().get(), nobv_Sz0_cuda, GSize);
@@ -368,22 +367,7 @@ int HeisenbergHamAbelianSymms_CUDA<T>::BuildSRStates(SRSBuildInfo build_info,
 	thrust::sort(SRS_states_min.begin(), SRS_states_min.end());
 	int SRS_unique_count = thrust::unique_count(thrust::device, SRS_states_min.begin(), SRS_states_min.end());
 	printf("SRS_unique_count: %d, nobv_gs: %d \n", SRS_unique_count, nobv_Sz0_cuda);
-
-	//printf("Sorted form:\n");
-	//thrust::copy(SRS_states_min.begin(), SRS_states_min.end(), std::ostream_iterator<int>(std::cout, "\n"));
-
 	auto SRS_p = thrust::unique(SRS_states_min.begin(), SRS_states_min.end());
-
-	//printf("Sorted unique form:\n");
-	//thrust::copy(SRS_states_min.begin(), SRS_states_min.begin()+ SRS_unique_count, std::ostream_iterator<int>(std::cout, "\n"));
-
-	/*
-	thrust::host_vector<uint32_t> SRS_states_h(nobv_Sz0_cuda * GSize);
-	thrust::copy(SRS_states.begin(), SRS_states.end(), SRS_states_h.begin());
-	printMatrixRowMajor_NonSq(thrust::raw_pointer_cast(&SRS_states_h[0]), nobv_Sz0_cuda, GSize);
-	printf("bas vecs:\n");
-	thrust::copy(bas_states_dev.begin(), bas_states_dev.end(), std::ostream_iterator<int>(std::cout, "\n"));
-	*/
 
 	// One has to also actually form the orbits from the generators of the orbits
 	// This could be done in a smart way by permuting in an approriate way the elements of SRS_states. Here we use a simpler brute-force way
@@ -392,26 +376,16 @@ int HeisenbergHamAbelianSymms_CUDA<T>::BuildSRStates(SRSBuildInfo build_info,
 	blocks_GS = (SRS_unique_count * GSize + threads_GS - 1) / threads_GS;
 	SetUpSRS_from_indices << < blocks_GS, threads_GS >> > (SRS_states_min.data().get(), SRS_states.data().get(), group_el_dev.data().get(), SRS_unique_count, GSize, LS, GS_fill, bas_states_dev.data().get());
 	cudaDeviceSynchronize();
-
 	// NOTE THAT SRS STATES ARE LABELLED BY THEIR INDEX IN THE CORRESPONDING HILBERT SPACE SECTOR.
-
-	//printf("Sorted unique form:\n");
-	//thrust::copy(SRS_states_min.begin(), SRS_states_min.begin()+ SRS_unique_count, std::ostream_iterator<uint32_t>(std::cout, "\n"));
-	//printf("And final created SRS state indices:\n");
-	//thrust::copy(SRS_states.begin(), SRS_states.begin() + SRS_unique_count*GSize, std::ostream_iterator<uint32_t>(std::cout, "\n"));
 
 	// Now first SRS_unique_count rows of SRS_states should hold all the required orbits
 	// Next, We need to normalize these orbits:
-
 	printf("Compute the norm of the SRSs for each irrep\n");
 	/* Remember that SRS_unique_count is now the number of orbits. */
 	norm_vecs.resize(SRS_unique_count * NIr);
 	blocks_GS = (SRS_unique_count * NIr + threads_GS - 1) / threads_GS;
 	ComputeSRSNorms << <blocks_GS, threads_GS >> > (norm_vecs.data().get(), SRS_states.data().get(), char_mat_dev.data().get(), SRS_unique_count, NIr, GSize, bas_states_dev.data().get());
 	cudaDeviceSynchronize();
-
-	//printf("Norms:\n");
-	//thrust::copy(norm_vecs.begin(), norm_vecs.begin()+ SRS_unique_count*NIr, std::ostream_iterator<float>(std::cout, "\n"));
 
 	// Finally, one needs to have mapping from the bas_vecs to the orbit and the corresponding order index within the orbit:
 	printf("Compute the mapping from the Hilbert space to the orbits\n");
@@ -420,13 +394,12 @@ int HeisenbergHamAbelianSymms_CUDA<T>::BuildSRStates(SRSBuildInfo build_info,
 	ComputeOrbitIndices << <blocks_GS, threads_GS >> > (orbit_indices.data().get(), SRS_unique_count, GSize, SRS_states.data().get(), GS_fill);
 	cudaDeviceSynchronize();
 
-	printDeviceMatrix<uint32_t>(orbit_indices, nobv_Sz0_cuda, 2,"OrbitIndices");
+	//printDeviceMatrix<uint32_t>(orbit_indices, nobv_Sz0_cuda, 2,"OrbitIndices");
 	//thrust::copy(orbit_indices.begin(), orbit_indices.end(), std::ostream_iterator<T>(std::cout, ", "));
-
 	return SRS_unique_count;
 }
 
-template int HeisenbergHamAbelianSymms_CUDA<float>::BuildSRStates(SRSBuildInfo build_info,
+template int HeisenbergXXZAbelianSymms_CUDA<float>::BuildSRStates(SRSBuildInfo build_info,
 	thrust::device_vector<uint32_t>& bas_states_dev,
 	thrust::device_vector<uint32_t>& SRS_states,
 	thrust::device_vector<uint32_t>& SRS_states_min,
@@ -435,7 +408,7 @@ template int HeisenbergHamAbelianSymms_CUDA<float>::BuildSRStates(SRSBuildInfo b
 	thrust::device_vector<uint32_t>& orbit_indices,
 	thrust::device_vector<float>& char_mat_dev);
 
-template int HeisenbergHamAbelianSymms_CUDA<complex_th>::BuildSRStates(SRSBuildInfo build_info,
+template int HeisenbergXXZAbelianSymms_CUDA<complex_th>::BuildSRStates(SRSBuildInfo build_info,
 	thrust::device_vector<uint32_t>& bas_states_dev,
 	thrust::device_vector<uint32_t>& SRS_states,
 	thrust::device_vector<uint32_t>& SRS_states_min,
@@ -445,7 +418,7 @@ template int HeisenbergHamAbelianSymms_CUDA<complex_th>::BuildSRStates(SRSBuildI
 	thrust::device_vector<complex_th>& char_mat_dev);
 
 
-template <typename T> complex_th HeisenbergHamAbelianSymms_CUDA<T>::ComputeStaticExpValZeroT(
+template <typename T> complex_th HeisenbergXXZAbelianSymms_CUDA<T>::ComputeStaticExpValZeroT(
 	ManyBodyOperator<complex_th> A,
 	int max_terms
 )
@@ -496,7 +469,7 @@ template <typename T> complex_th HeisenbergHamAbelianSymms_CUDA<T>::ComputeStati
 	unsigned long long int nobv = pow(2, LS);
 
 	int GS_fill = GS_sector;
-	if (max_terms == 0) max_terms = (GS_fill * hop_f) / 2;
+	if (max_terms == 0) max_terms = max_coupling_terms;
 	int nobv_Sz0_cuda = nobv_gs;
 
 	int NIr = SymmGroup->GetCharTable().size(); // number of irreducible representations
@@ -527,6 +500,24 @@ template <typename T> complex_th HeisenbergHamAbelianSymms_CUDA<T>::ComputeStati
 		group_el_dev, norm_vecs, orbit_indices, char_mat_dev);
 
 	// Unfortunately, we also need to build the Hamiltonian for the ground state irrep.
+
+	// Allocate CUDA operators:
+	ManyBodyOperator<T> H = lattice_model.GetH();
+	OperatorVectors<T> Ham_vecs = BuildOperatorVecs(H);
+	int H_size = Ham_vecs.H_size;
+	int H_col_size = Ham_vecs.H_col_size;
+
+	// Copy to device memory:
+	thrust::device_vector<OperatorType> H_decode_table_dev(H_size * H_col_size);
+	thrust::device_vector<T> H_scalar_table_dev(H_size);
+	thrust::device_vector<int> H_site_table_dev(H_size * H_col_size);
+	thrust::device_vector<int> H_NOTerms_dev(H_size);
+
+	thrust::copy(Ham_vecs.H_decode_table.begin(), Ham_vecs.H_decode_table.end(), H_decode_table_dev.begin());
+	thrust::copy(Ham_vecs.H_scalar_table.begin(), Ham_vecs.H_scalar_table.end(), H_scalar_table_dev.begin());
+	thrust::copy(Ham_vecs.H_site_table.begin(), Ham_vecs.H_site_table.end(), H_site_table_dev.begin());
+	thrust::copy(Ham_vecs.H_NOTerms.begin(), Ham_vecs.H_NOTerms.end(), H_NOTerms_dev.begin());
+
 	printf("Allocate the arrays needed to represnt the Hamiltonian\n");
 	thrust::device_vector<uint32_t> index_mat_dev(SRS_unique_count * max_terms);
 	thrust::device_vector<T> vals_mat_dev(SRS_unique_count * max_terms, (T)0.0);
@@ -537,34 +528,27 @@ template <typename T> complex_th HeisenbergHamAbelianSymms_CUDA<T>::ComputeStati
 	short int* track_ptr = thrust::raw_pointer_cast(&track_non_zero_inds_dev[0]);
 
 	int blocks_GS = (SRS_unique_count + threads_GS - 1) / threads_GS;
-
-	int T_size = T_mat.getTSize();
-	thrust::device_vector<int> T_ind1_dev(T_size, 0);
-	thrust::device_vector<int> T_ind2_dev(T_size, 0);
-	thrust::device_vector<T> T_val_dev(T_size, 0);
-	BuildTmats(T_size, T_ind1_dev, T_ind2_dev, T_val_dev);
-
-	BuildHamiltonianForAbelianGroup << <blocks_GS, threads_GS >> > (
-		J_weights[0], 
-		J_weights[2], 
-		GS_fill, 
-		bas_states_dev.data().get(), 
+	BuildHamiltonianXXZForAbelianGroup << <blocks_GS, threads_GS >> > (
+		H_scalar_table_dev.data().get(),
+		H_decode_table_dev.data().get(),
+		H_site_table_dev.data().get(),
+		H_NOTerms_dev.data().get(),
+		Ham_vecs.H_size,
+		Ham_vecs.H_col_size,
+		GS_fill,
+		bas_states_dev.data().get(),
 		index_mat_dev.data().get(),
-		vals_mat_dev.data().get(), 
-		track_non_zero_inds_dev.data().get(), 
-		max_terms, 
+		vals_mat_dev.data().get(),
+		track_non_zero_inds_dev.data().get(),
+		max_terms,
 		SRS_unique_count,
-		T_ind1_dev.data().get(), 
-		T_ind2_dev.data().get(), 
-		T_val_dev.data().get(), 
-		T_size,
-		SRS_states.data().get(), 
-		GSize, 
-		orbit_indices.data().get(), 
-		char_mat_dev.data().get(), 
+		SRS_states.data().get(),
+		GSize,
+		orbit_indices.data().get(),
+		char_mat_dev.data().get(),
 		GS_irrep,
-		norm_vecs.data().get(), 
-		NIr, 
+		norm_vecs.data().get(),
+		NIr,
 		tol_norm
 		);
 	cudaDeviceSynchronize();
@@ -589,10 +573,10 @@ template <typename T> complex_th HeisenbergHamAbelianSymms_CUDA<T>::ComputeStati
 
 	ExpecValArbOperatorAbelianIrrepProjHeisenbergZeroT << <blocks_GS, threads_GS >> > (
 		A_scalar_table_dev.data().get(),
-		A_decode_table_dev.data().get(), 
-		A_site_table_dev.data().get(), 
+		A_decode_table_dev.data().get(),
+		A_site_table_dev.data().get(),
 		A_NOTerms_dev.data().get(),
-		max_terms, SRS_unique_count, 
+		max_terms, SRS_unique_count,
 		SRS_states.data().get(),
 		GSize,
 		GS_sector,
@@ -616,12 +600,12 @@ template <typename T> complex_th HeisenbergHamAbelianSymms_CUDA<T>::ComputeStati
 	return A_sum;
 }
 
-template complex_th HeisenbergHamAbelianSymms_CUDA<float>::ComputeStaticExpValZeroT(
+template complex_th HeisenbergXXZAbelianSymms_CUDA<float>::ComputeStaticExpValZeroT(
 	ManyBodyOperator<complex_th> A,
 	int max_terms
 );
 
-template complex_th HeisenbergHamAbelianSymms_CUDA<complex_th>::ComputeStaticExpValZeroT(
+template complex_th HeisenbergXXZAbelianSymms_CUDA<complex_th>::ComputeStaticExpValZeroT(
 	ManyBodyOperator<complex_th> A,
 	int max_terms
 );

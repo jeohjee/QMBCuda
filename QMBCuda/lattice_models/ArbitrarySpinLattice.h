@@ -16,6 +16,7 @@ public:
 
 	void CreateGeometry();
 	ManyBodyOperator<T> GetH();
+	LatticeGeometryInfo GetGeomInfo();
 	void SetH(ManyBodyOperator<T> _H);
 protected:
 	ManyBodyOperator<T> H; // This is the Hamiltonian of the lattice.

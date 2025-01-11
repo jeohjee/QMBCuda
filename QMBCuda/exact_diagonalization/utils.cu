@@ -2,6 +2,7 @@
 #include "../utils/misc_funcs_gpu.h"
 #include "thrust/complex.h"
 #include "cooperative_groups.h"
+#include <stdio.h>
 
 using complex_th = thrust::complex<float>;
 
@@ -29,9 +30,7 @@ __device__ int GetIndexInHilbertSubspace(uint32_t target_state, int GS_sector) {
 
         }
         tot_count = tot_count - 1;
-
     }
-
     //printf("target_state: %d, final index: %d, GS sector: %d\n", (int)target_state, tmp_alpha, GS_sector);
     return tmp_alpha;
 }
@@ -80,6 +79,197 @@ __global__ void ComputeOrbitIndices(uint32_t* __restrict orbit_indices, int SRS_
     //printf("id= %d, SRS_states[id] = %u, orbit_ind = %d, intra_orbit_ind = %d, target_ind = %d \n", id, SRS_states[id], orbit_ind, intra_orbit_ind, target_ind);
 }
 
+
+template <typename T>
+__global__ void BuildHamiltonianXXZForAbelianGroup(
+    T* __restrict H_scalar_table_dev,
+    OperatorType* __restrict H_decode_table_dev,
+    int* __restrict H_site_table_dev,
+    int* __restrict H_NOTerms_dev,
+    int H_size,
+    int H_col_size,
+    int GS_sector,
+    uint32_t* __restrict basis_states,
+    uint32_t* __restrict ind_mat,
+    T* __restrict val_mat,
+    short int* __restrict  track_vec,
+    int max_terms,
+    int SRS_unique_count,
+    uint32_t* __restrict SRS_states_inds,
+    int GSize,
+    uint32_t* __restrict orbit_indices,
+    T* __restrict char_mat,
+    int alpha_ind,
+    float* __restrict norm_vecs,
+    int NIr,
+    float tol_norm
+) {
+    // TO DO: to move the input parameters to appropriate structs
+    // Note that here the logic is slightly different than in simpler BuildHoppingHam_v2 in a sense that SRS_states_inds
+    // labels the indices of the SRS states WITHIN the chosen Hilbert subspace
+    // This function is an alternative and more generic implementation for BuildHamiltonianForAbelianGroup.
+    int id = threadIdx.x + blockIdx.x * blockDim.x;
+    if (id >= SRS_unique_count) return;
+
+    // The first index in each row is kept for the on-site accumulation
+    ind_mat[max_terms * id] = id;
+    int track_ind = 1; // We have reserved track_ind = 0 for the diagonal element.
+
+    float curr_norm = norm_vecs[id * NIr + alpha_ind];
+    if (curr_norm < tol_norm) return; // in case of a null state
+
+    T Jz_szsz_acc = (T)0.0; // as the model has the XXZ form, this number is float in practice
+    uint32_t source_state = basis_states[SRS_states_inds[id * GSize]];
+
+    bool interr_bool;
+    // loop over the terms of the operator:
+    for (int hi = 0; hi < H_size; hi++) {
+        uint32_t target_state = source_state;
+        T alpha_coef = H_scalar_table_dev[hi]; // possible scalar!
+        T alpha_coef_orig = H_scalar_table_dev[hi];
+
+        interr_bool = false;
+        // loop over the operators within the current term:
+        char str_buffer[50];
+        int buffer_ind = 0;
+       
+        for (int hi2 = 0; hi2 < H_NOTerms_dev[hi]; hi2++) {
+
+            int tmp_site = H_site_table_dev[hi * H_col_size + hi2];
+            OperatorType tmp_action = H_decode_table_dev[hi * H_col_size + hi2];
+            bool tmp_spin = target_state & (1 << tmp_site); // Get the current spin for the enquired site
+
+            char op_ident ='N';
+            // This implementation is specific for the spin (Heisenberg) Hamiltonians:
+            switch (tmp_action) {
+            case OperatorType::Sm:
+                if (!(target_state & (1 << tmp_site))) {
+                    interr_bool = true;
+                    break;
+                }
+                target_state = target_state & ~((uint32_t)1 << tmp_site);
+                op_ident = 'm';
+                break;
+            case OperatorType::Sp:
+                if ((target_state & (1 << tmp_site))) {
+                    interr_bool = true;
+                    break;
+                }
+                target_state = target_state | (uint32_t)(1 << tmp_site);
+                op_ident = 'p';
+                break;
+            case OperatorType::Sz:
+                // For Sz, we need to multiply coef by -1 for spin-down:
+                alpha_coef = alpha_coef * (0.5) * (-1.0 + 2.0 * (T)(tmp_spin));
+                op_ident = 'z';
+                break;
+            }
+            if (interr_bool) break;
+
+            /*
+            str_buffer[buffer_ind++] = 'S';
+            str_buffer[buffer_ind++] = op_ident;
+            str_buffer[buffer_ind++] = '(';
+            if (tmp_site == 0)  str_buffer[buffer_ind++] = '0';
+            else {
+                int temp = tmp_site;
+                int digits = 0;
+                while (temp > 0) {
+                    temp /= 10;
+                    digits++;
+                }
+                for (int i = digits - 1; i >= 0; --i) {
+                    str_buffer[buffer_ind + i] = '0' + (tmp_site % 10);
+                    tmp_site /= 10;
+                }
+                buffer_ind += digits;
+            }
+            str_buffer[buffer_ind++] = ')';
+            */
+        }
+        if (interr_bool) continue;
+        //printf("(%f,%f)%s, original coef: (%f,%f)\n", ((complex_th)alpha_coef).real(), ((complex_th)alpha_coef).imag(), str_buffer,
+        //    ((complex_th)alpha_coef_orig).real(), ((complex_th)alpha_coef_orig).imag());
+        int target_ind = GetIndexInHilbertSubspace(target_state, GS_sector);
+        if (target_state == source_state) {
+            Jz_szsz_acc += alpha_coef;
+            continue;
+        }
+        // One needs to solve now to which orbit the target_state belongs to
+        uint32_t orbit_ind = orbit_indices[target_ind * 2];
+        int Gm_ind = (int)orbit_indices[target_ind * 2 + 1]; // index within the orbit
+
+        if (norm_vecs[orbit_ind * NIr + alpha_ind] < tol_norm) continue; // in case target orbit is a null state
+
+        int id_write = max_terms * id + track_ind;
+        ind_mat[id_write] = orbit_ind;
+
+        float norm_term = norm_vecs[orbit_ind * NIr + alpha_ind] / norm_vecs[id * NIr + alpha_ind];
+       
+        val_mat[id_write] = alpha_coef * char_mat[GSize * alpha_ind + Gm_ind] * norm_term;
+
+        // CONTINUE HERE NEXT, THERE IS DIFFERENCE BETWEEN EXP A FUNC AND ABELIAN HAM FUNC
+
+        //printf("off-d term is (%f,%f), norm_term is: %f, 1st norm is: %f, 2nd norm is %f, char term: (%f,%f), Jz term is: %f\n", ((complex_th)val_mat[id_write]).real(),
+        //    ((complex_th)val_mat[id_write]).imag(), norm_term, norm_vecs[orbit_ind * NIr + alpha_ind], norm_vecs[id * NIr + alpha_ind],
+        //    ((complex_th)char_mat[GSize * alpha_ind + Gm_ind]).real(),
+        //    ((complex_th)char_mat[GSize * alpha_ind + Gm_ind]).imag(), Jz_szsz_acc);
+        track_ind += 1; //update the current index
+    }
+    val_mat[max_terms * id] = Jz_szsz_acc;
+    track_vec[id] = track_ind;
+
+}
+template
+__global__ void BuildHamiltonianXXZForAbelianGroup<float>(
+    float* __restrict H_scalar_table_dev,
+    OperatorType* __restrict H_decode_table_dev,
+    int* __restrict H_site_table_dev,
+    int* __restrict H_NOTerms_dev,
+    int H_size,
+    int H_col_size,
+    int GS_sector,
+    uint32_t* __restrict basis_states,
+    uint32_t* __restrict ind_mat,
+    float* __restrict val_mat,
+    short int* __restrict  track_vec,
+    int max_terms,
+    int SRS_unique_count,
+    uint32_t* __restrict SRS_states_inds,
+    int GSize,
+    uint32_t* __restrict orbit_indices,
+    float* __restrict char_mat,
+    int alpha_ind,
+    float* __restrict norm_vecs,
+    int NIr,
+    float tol_norm
+);
+template
+__global__ void BuildHamiltonianXXZForAbelianGroup<complex_th>(
+    thrust::complex<float>* __restrict H_scalar_table_dev,
+    OperatorType* __restrict H_decode_table_dev,
+    int* __restrict H_site_table_dev,
+    int* __restrict H_NOTerms_dev,
+    int H_size,
+    int H_col_size,
+    int GS_sector,
+    uint32_t* __restrict basis_states,
+    uint32_t* __restrict ind_mat,
+    complex_th* __restrict val_mat,
+    short int* __restrict  track_vec,
+    int max_terms,
+    int SRS_unique_count,
+    uint32_t* __restrict SRS_states_inds,
+    int GSize,
+    uint32_t* __restrict orbit_indices,
+    complex_th* __restrict char_mat,
+    int alpha_ind,
+    float* __restrict norm_vecs,
+    int NIr,
+    float tol_norm
+);
+
+
 template <typename T>
 __global__ void BuildHamiltonianForAbelianGroup(
     float Jxy_w, 
@@ -109,7 +299,6 @@ __global__ void BuildHamiltonianForAbelianGroup(
     
     // Note that here the logic is slightly different than in simpler BuildHoppingHam_v2 in a sense that SRS_states_inds
     // labels the indices of the SRS states WITHIN the chosen Hilbert subspace
-
     int id = threadIdx.x + blockIdx.x * blockDim.x;
     if (id >= SRS_unique_count) return;
 
@@ -125,7 +314,7 @@ __global__ void BuildHamiltonianForAbelianGroup(
 
 
     for (int ti2 = 0; ti2 < T_size; ti2++) {
-
+        
         int i_ind = T_ind1_dev[ti2];
         int j_ind = T_ind2_dev[ti2];
 
@@ -243,31 +432,25 @@ __global__ void BuildHoppingHam_v2(
     int T_size
 ) {
     // Brute force Heisenberg Hamiltonian without using any symmetry groups.
-
     // TO DO: to move the input parameters to appropriate structs
-
     int id = threadIdx.x + blockIdx.x * blockDim.x;
     if (id >= nobv) return;
 
     // The first index in each row is kept for the on-site accumulation
     ind_mat[max_terms * id] = id;
     int track_ind = 1;
-
     float Jz_szsz_acc = 0;
 
     for (int ti2 = 0; ti2 < T_size; ti2++) {
 
         int i_ind = T_ind1_dev[ti2];
         int j_ind = T_ind2_dev[ti2];
-
         float J_z = T_val_dev[ti2] * Jxy_w;
         float J_xy = T_val_dev[ti2] * Jz_w;
 
         // Wed need to first add the SzSz term:
-
         bool i_spin = basis_states[id] & (1 << i_ind);
         bool j_spin = basis_states[id] & (1 << j_ind);
-
         Jz_szsz_acc += J_z * 0.25 * (-1.0 + 2.0 * static_cast<float>(i_spin)) * (-1.0 + 2.0 * static_cast<float>(j_spin));
 
         // check j_ind and i_ind bits

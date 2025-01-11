@@ -1,7 +1,57 @@
 #include "SingleParticleOperators.h"
 #include "thrust/complex.h"
+#include <map>
 
 using complex_th = thrust::complex<float>;
+
+OperatorType GetConjugateOperatorType(OperatorType orig_op) {
+
+	// First we define the mapping between the original and conjugate operators:
+	std::map<OperatorType, OperatorType> conjugation_map;
+	conjugation_map[OperatorType::I] = OperatorType::I;
+
+	// Spin operators (i.e. hard-core bosons):
+	conjugation_map[OperatorType::Sz] = OperatorType::Sz;
+	conjugation_map[OperatorType::Sp] = OperatorType::Sm;
+	conjugation_map[OperatorType::Sm] = OperatorType::Sp;
+
+	// The usual bosons:
+	conjugation_map[OperatorType::b] = OperatorType::b_dag;
+	conjugation_map[OperatorType::b_dag] = OperatorType::b;
+
+	// Femionic operators:
+	conjugation_map[OperatorType::c_up] = OperatorType::c_dag_up;
+	conjugation_map[OperatorType::c_dag_up] = OperatorType::c_up;
+	conjugation_map[OperatorType::c_down] = OperatorType::c_dag_down;
+	conjugation_map[OperatorType::c_dag_down] = OperatorType::c_down;
+
+	return conjugation_map[orig_op];
+}
+
+std::string PrintOperatorType(OperatorType op) {
+	// First we define the mapping between the operators and their text form:
+	std::map<OperatorType, std::string> print_map;
+
+	print_map[OperatorType::I] = "I";
+
+	// Spin operators (i.e. hard-core bosons):
+	print_map[OperatorType::Sz] = "Sz";
+	print_map[OperatorType::Sp] = "Sp";
+	print_map[OperatorType::Sm] = "Sm";
+
+	// The usual bosons:
+	print_map[OperatorType::b] = "b";
+	print_map[OperatorType::b_dag] = "b_dag";
+
+	// Femionic operators:
+	print_map[OperatorType::c_up] = "c_up";
+	print_map[OperatorType::c_dag_up] = "c_dag_up";
+	print_map[OperatorType::c_down] = "c_dw";
+	print_map[OperatorType::c_dag_down] = "c_dag_dw";
+
+	return print_map[op];
+
+}
 
 template <typename T> Operator<T>::Operator(int site_in, OperatorType type_in, T scalar_in) {
 	site = site_in;

@@ -38,6 +38,8 @@ int triangular_lattice_symmetry_example();
 
 int triangular_lattice_SzSz_correlator_example();
 
-int create_XXX_Heisenberg_square();
+int create_XXX_Heisenberg();
+
+int solve_XXX_Heisenberg_square_generic_formalism();
 
 int run_example();

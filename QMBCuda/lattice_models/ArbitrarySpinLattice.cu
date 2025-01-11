@@ -52,3 +52,10 @@ void SpinHamiltonian<T>::SetH(ManyBodyOperator<T> _H)
 }
 template void SpinHamiltonian<float>::SetH(ManyBodyOperator<float> _H);
 template void SpinHamiltonian<complex_th>::SetH(ManyBodyOperator<complex_th> _H);
+
+template <typename T>
+LatticeGeometryInfo SpinHamiltonian<T>::GetGeomInfo() {
+	return geom_info;
+}
+template LatticeGeometryInfo SpinHamiltonian<float>::GetGeomInfo();
+template LatticeGeometryInfo SpinHamiltonian<complex_th>::GetGeomInfo();
