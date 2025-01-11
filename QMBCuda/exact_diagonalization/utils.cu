@@ -130,16 +130,12 @@ __global__ void BuildHamiltonianXXZForAbelianGroup(
 
         interr_bool = false;
         // loop over the operators within the current term:
-        char str_buffer[50];
-        int buffer_ind = 0;
-       
         for (int hi2 = 0; hi2 < H_NOTerms_dev[hi]; hi2++) {
 
             int tmp_site = H_site_table_dev[hi * H_col_size + hi2];
             OperatorType tmp_action = H_decode_table_dev[hi * H_col_size + hi2];
             bool tmp_spin = target_state & (1 << tmp_site); // Get the current spin for the enquired site
 
-            char op_ident ='N';
             // This implementation is specific for the spin (Heisenberg) Hamiltonians:
             switch (tmp_action) {
             case OperatorType::Sm:
@@ -148,7 +144,6 @@ __global__ void BuildHamiltonianXXZForAbelianGroup(
                     break;
                 }
                 target_state = target_state & ~((uint32_t)1 << tmp_site);
-                op_ident = 'm';
                 break;
             case OperatorType::Sp:
                 if ((target_state & (1 << tmp_site))) {
@@ -156,40 +151,15 @@ __global__ void BuildHamiltonianXXZForAbelianGroup(
                     break;
                 }
                 target_state = target_state | (uint32_t)(1 << tmp_site);
-                op_ident = 'p';
                 break;
             case OperatorType::Sz:
                 // For Sz, we need to multiply coef by -1 for spin-down:
                 alpha_coef = alpha_coef * (0.5) * (-1.0 + 2.0 * (T)(tmp_spin));
-                op_ident = 'z';
                 break;
             }
             if (interr_bool) break;
-
-            /*
-            str_buffer[buffer_ind++] = 'S';
-            str_buffer[buffer_ind++] = op_ident;
-            str_buffer[buffer_ind++] = '(';
-            if (tmp_site == 0)  str_buffer[buffer_ind++] = '0';
-            else {
-                int temp = tmp_site;
-                int digits = 0;
-                while (temp > 0) {
-                    temp /= 10;
-                    digits++;
-                }
-                for (int i = digits - 1; i >= 0; --i) {
-                    str_buffer[buffer_ind + i] = '0' + (tmp_site % 10);
-                    tmp_site /= 10;
-                }
-                buffer_ind += digits;
-            }
-            str_buffer[buffer_ind++] = ')';
-            */
         }
         if (interr_bool) continue;
-        //printf("(%f,%f)%s, original coef: (%f,%f)\n", ((complex_th)alpha_coef).real(), ((complex_th)alpha_coef).imag(), str_buffer,
-        //    ((complex_th)alpha_coef_orig).real(), ((complex_th)alpha_coef_orig).imag());
         int target_ind = GetIndexInHilbertSubspace(target_state, GS_sector);
         if (target_state == source_state) {
             Jz_szsz_acc += alpha_coef;
@@ -205,15 +175,7 @@ __global__ void BuildHamiltonianXXZForAbelianGroup(
         ind_mat[id_write] = orbit_ind;
 
         float norm_term = norm_vecs[orbit_ind * NIr + alpha_ind] / norm_vecs[id * NIr + alpha_ind];
-       
         val_mat[id_write] = alpha_coef * char_mat[GSize * alpha_ind + Gm_ind] * norm_term;
-
-        // CONTINUE HERE NEXT, THERE IS DIFFERENCE BETWEEN EXP A FUNC AND ABELIAN HAM FUNC
-
-        //printf("off-d term is (%f,%f), norm_term is: %f, 1st norm is: %f, 2nd norm is %f, char term: (%f,%f), Jz term is: %f\n", ((complex_th)val_mat[id_write]).real(),
-        //    ((complex_th)val_mat[id_write]).imag(), norm_term, norm_vecs[orbit_ind * NIr + alpha_ind], norm_vecs[id * NIr + alpha_ind],
-        //    ((complex_th)char_mat[GSize * alpha_ind + Gm_ind]).real(),
-        //    ((complex_th)char_mat[GSize * alpha_ind + Gm_ind]).imag(), Jz_szsz_acc);
         track_ind += 1; //update the current index
     }
     val_mat[max_terms * id] = Jz_szsz_acc;

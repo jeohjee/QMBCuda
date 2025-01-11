@@ -913,7 +913,7 @@ int solve_XXX_Heisenberg_square_generic_formalism() {
 }
 
 int run_example() {
-    int func_ind = 7; // The function we execute
+    int func_ind = 17; // The function we execute
 
     std::vector <std::function<int() >> func_list = {
         complex_example,
