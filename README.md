@@ -12,7 +12,7 @@ DEPENDENCIES:
 - Armadillo (for user-friendliness of computationally non-demanding linear algebra)
 
 Immediate TO DO:
-- Fix Heisenberg model class to deal with a more generic set of operators and make it a true XXZ (now it's in practice just a XXZ with real-valued spin-spin coupling). This feature is work in progress.
+- Fix Heisenberg model class to deal with a more generic set of operators and make it a true XXZ (now it's in practice just a XXZ with real-valued spin-spin coupling). This feature is work in progress (almost done).
 
   
 TO DO in the longer time period:
